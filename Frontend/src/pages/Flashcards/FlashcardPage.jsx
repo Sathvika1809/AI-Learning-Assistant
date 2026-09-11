@@ -19,8 +19,8 @@ import Modal from "../../components/common/Modal";
 import Flashcard from "../../components/flashcards/Flashcard";
 
 const FlashcardPage = () => {
-
   const { id: documentId } = useParams();
+
   const [flashcardSets, setFlashcardSets] = useState([]);
   const [flashcards, setFlashcards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,10 +31,11 @@ const FlashcardPage = () => {
 
   const fetchFlashcards = async () => {
     setLoading(true);
+
     try {
-      const response = await flashcardService.getFlashcardsForDocument(
-        documentId
-      );
+      const response =
+        await flashcardService.getFlashcardsForDocument(documentId);
+
       setFlashcardSets(response.data[0]);
       setFlashcards(response.data[0]?.cards || []);
     } catch (error) {
@@ -51,9 +52,12 @@ const FlashcardPage = () => {
 
   const handleGenerateFlashcards = async () => {
     setGenerating(true);
+
     try {
       await aiService.generateFlashcards(documentId);
+
       toast.success("Flashcards generated successfully!");
+
       fetchFlashcards();
     } catch (error) {
       toast.error(error.message || "Failed to generate flashcards.");
@@ -63,22 +67,33 @@ const FlashcardPage = () => {
   };
 
   const handleNextCard = () => {
-    handleReview(currentCardIndex)
-    setCurrentCardIndex((prevIndex) => (prevIndex + 1) % flashcards.length);
+    handleReview(currentCardIndex);
+
+    setCurrentCardIndex(
+      (prevIndex) => (prevIndex + 1) % flashcards.length
+    );
   };
 
   const handlePrevCard = () => {
-    handleReview(currentCardIndex)
+    handleReview(currentCardIndex);
+
     setCurrentCardIndex(
-      (prevIndex) => (prevIndex - 1 + flashcards.length) % flashcards.length
+      (prevIndex) =>
+        (prevIndex - 1 + flashcards.length) % flashcards.length
     );
   };
 
   const handleReview = async (index) => {
     const currentCard = flashcards[currentCardIndex];
+
     if (!currentCard) return;
+
     try {
-      await flashcardService.reviewFlashcard(currentCard._id, index);
+      await flashcardService.reviewFlashcard(
+        currentCard._id,
+        index
+      );
+
       toast.success("Flashcard reviewed!");
     } catch (error) {
       toast.error("Failed to review flashcard.");
@@ -88,11 +103,15 @@ const FlashcardPage = () => {
   const handleToggleStar = async (cardId) => {
     try {
       await flashcardService.toggleStar(cardId);
+
       setFlashcards((prevFlashcards) =>
         prevFlashcards.map((card) =>
-          card._id === cardId ? { ...card, isStarred: !card.isStarred } : card
+          card._id === cardId
+            ? { ...card, isStarred: !card.isStarred }
+            : card
         )
       );
+
       toast.success("Flashcard starred status updated!");
     } catch (error) {
       toast.error("Failed to update star status.");
@@ -101,13 +120,21 @@ const FlashcardPage = () => {
 
   const handleDeleteFlashcardSet = async () => {
     setDeleting(true);
+
     try {
-      await flashcardService.deleteFlashcardSet(flashcardSets._id);
+      await flashcardService.deleteFlashcardSet(
+        flashcardSets._id
+      );
+
       toast.success("Flashcard set deleted successfully!");
+
       setIsDeleteModalOpen(false);
-      fetchFlashcards(); // Refetch to show empty state
+
+      fetchFlashcards();
     } catch (error) {
-      toast.error(error.message || "Failed to delete flashcard set.");
+      toast.error(
+        error.message || "Failed to delete flashcard set."
+      );
     } finally {
       setDeleting(false);
     }
@@ -117,6 +144,7 @@ const FlashcardPage = () => {
     if (loading) {
       return <Spinner />;
     }
+
     if (flashcards.length === 0) {
       return (
         <EmptyState
@@ -129,27 +157,35 @@ const FlashcardPage = () => {
     const currentCard = flashcards[currentCardIndex];
 
     return (
-      <div className=" flex flex-col items-center space-y-6">
-        <div className=" w-full max-w-md">
-          <Flashcard flashcard={currentCard} onToggleStar={handleToggleStar} />
+      <div className="flex flex-col items-center space-y-6">
+        <div className="w-full max-w-md">
+          <Flashcard
+            flashcard={currentCard}
+            onToggleStar={handleToggleStar}
+          />
         </div>
-        <div className=" flex items-center gap-4">
+
+        <div className="flex items-center gap-4">
           <Button
             onClick={handlePrevCard}
             variant="secondary"
             disabled={flashcards.length <= 1}
           >
-            <ChevronLeft size={16} /> Previous
+            <ChevronLeft size={16} />
+            Previous
           </Button>
-          <span className=" text-sm text-neutral-600">
+
+          <span className="text-sm text-neutral-600">
             {currentCardIndex + 1} / {flashcards.length}
           </span>
+
           <Button
             onClick={handleNextCard}
             variant="secondary"
             disabled={flashcards.length <= 1}
           >
-            Next <ChevronRight size={16} />
+            Next
+            <ChevronRight size={16} />
           </Button>
         </div>
       </div>
@@ -158,10 +194,10 @@ const FlashcardPage = () => {
 
   return (
     <div>
-      <div className=" mb-4">
+      <div className="mb-4">
         <Link
           to={`/documents/${documentId}`}
-          className=" inline-flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+          className="inline-flex items-center gap-2 text-sm text-neutral-600 hover:text-sky-600 transition-colors"
         >
           <ArrowLeft size={16} />
           Back to Document
@@ -169,24 +205,28 @@ const FlashcardPage = () => {
       </div>
 
       <PageHeader title="Flashcards">
-        <div className=" flex gap-2 ">
+        <div className="flex gap-2">
           {!loading &&
             (flashcards.length > 0 ? (
-              <>
-                <Button
-                  onClick={() => setIsDeleteModalOpen(true)}
-                  disabled={deleting}
-                >
-                  <Trash2 size={16} /> Delete Set
-                </Button>
-              </>
+              <Button
+                onClick={() => setIsDeleteModalOpen(true)}
+                disabled={deleting}
+                className="bg-gradient-to-r from-red-400 to-red-500 hover:from-red-500 hover:to-red-600 shadow-lg shadow-red-400/20"
+              >
+                <Trash2 size={16} />
+                Delete Set
+              </Button>
             ) : (
-              <Button onClick={handleGenerateFlashcards} disabled={generating}>
+              <Button
+                onClick={handleGenerateFlashcards}
+                disabled={generating}
+              >
                 {generating ? (
                   <Spinner />
                 ) : (
                   <>
-                    <Plus size={16} /> Generate Flashcards
+                    <Plus size={16} />
+                    Generate Flashcards
                   </>
                 )}
               </Button>
@@ -201,12 +241,13 @@ const FlashcardPage = () => {
         onClose={() => setIsDeleteModalOpen(false)}
         title="Confirm Delete Flashcard Set"
       >
-        <div className=" space-y-4">
-          <p className=" text-sm text-neutral-600">
-            Are you sure you want to delete all flashcards for this document?
-            This action cannot be undone.
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-600">
+            Are you sure you want to delete all flashcards for this
+            document? This action cannot be undone.
           </p>
-          <div className=" flex justify-end gap-2 pt-2">
+
+          <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
               variant="secondary"
@@ -215,10 +256,11 @@ const FlashcardPage = () => {
             >
               Cancel
             </Button>
+
             <Button
               onClick={handleDeleteFlashcardSet}
               disabled={deleting}
-              className=" bg-red-500 hover:bg-red-600 active:bg-red-700 focus:ring-red-500"
+              className="bg-red-500 hover:bg-red-600 active:bg-red-700 focus:ring-red-500"
             >
               {deleting ? "Deleting..." : "Delete"}
             </Button>
@@ -226,7 +268,7 @@ const FlashcardPage = () => {
         </div>
       </Modal>
     </div>
-  )
-}
+  );
+};
 
-export default FlashcardPage
+export default FlashcardPage;

@@ -31,13 +31,12 @@ ${text.substring(0, 15000)}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
     const generatedText = response.text;
 
-    // Parse the response
     const flashcards = [];
     const cards = generatedText.split('---').filter(c => c.trim());
 
@@ -52,6 +51,7 @@ ${text.substring(0, 15000)}`;
           answer = line.substring(2).trim();
         } else if (line.startsWith('D:')) {
           const diff = line.substring(2).trim().toLowerCase();
+
           if (['easy', 'medium', 'hard'].includes(diff)) {
             difficulty = diff;
           }
@@ -59,7 +59,11 @@ ${text.substring(0, 15000)}`;
       }
 
       if (question && answer) {
-        flashcards.push({ question, answer, difficulty });
+        flashcards.push({
+          question,
+          answer,
+          difficulty
+        });
       }
     }
 
@@ -70,11 +74,12 @@ ${text.substring(0, 15000)}`;
   }
 };
 
+
 /**
  * Generate quiz questions
  * @param {string} text - Document text
  * @param {number} numQuestions - Number of questions
- * @returns {Promise<Array<{question: string, options: Array, correctAnswer: string, explanation: string, difficulty: string}>>}
+ * @returns {Promise<Array>}
  */
 export const generateQuiz = async (text, numQuestions = 5) => {
   const prompt = `Generate exactly ${numQuestions} multiple choice questions from the following text.
@@ -95,21 +100,30 @@ ${text.substring(0, 15000)}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
     const generatedText = response.text;
 
+    
     const questions = [];
-    const questionBlocks = generatedText.split('---').filter(q => q.trim());
+    const questionBlocks = generatedText
+      .split('---')
+      .filter(q => q.trim());
 
     for (const block of questionBlocks) {
       const lines = block.trim().split('\n');
-      let question = '', options = [], correctAnswer = '', explanation = '', difficulty = 'medium';
+
+      let question = '';
+      let options = [];
+      let correctAnswer = '';
+      let explanation = '';
+      let difficulty = 'medium';
 
       for (const line of lines) {
         const trimmed = line.trim();
+
         if (trimmed.startsWith('Q:')) {
           question = trimmed.substring(2).trim();
         } else if (trimmed.match(/^0\d:/)) {
@@ -120,6 +134,7 @@ ${text.substring(0, 15000)}`;
           explanation = trimmed.substring(2).trim();
         } else if (trimmed.startsWith('D:')) {
           const diff = trimmed.substring(2).trim().toLowerCase();
+
           if (['easy', 'medium', 'hard'].includes(diff)) {
             difficulty = diff;
           }
@@ -127,16 +142,25 @@ ${text.substring(0, 15000)}`;
       }
 
       if (question && options.length === 4 && correctAnswer) {
-        questions.push({ question, options, correctAnswer, explanation, difficulty });
+        questions.push({
+          question,
+          options,
+          correctAnswer,
+          explanation,
+          difficulty
+        });
       }
     }
 
     return questions.slice(0, numQuestions);
   } catch (error) {
-    console.error('Gemini API error:', error);
-    throw new Error('Failed to generate quiz');
+  console.error('Gemini API error:', error);
+  console.error('Gemini API error message:', error?.message);
+  console.error('Gemini API error response:', error?.response?.data);
+  throw new Error('Failed to generate quiz');
   }
 };
+
 
 /**
  * Generate document summary
@@ -152,50 +176,102 @@ ${text.substring(0, 20000)}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
-    const generatedText = response.text;
-    return generatedText;
+    return response.text;
   } catch (error) {
     console.error('Gemini API error:', error);
     throw new Error('Failed to generate summary');
   }
 };
 
+
 /**
- * Chat with document context
+ * Chat with semantically retrieved document context
+ *
+ * IMPORTANT:
+ * The chunks passed to this function come from the semantic RAG
+ * pipeline:
+ *
+ * Question
+ *    ↓
+ * Gemini Embedding
+ *    ↓
+ * ChromaDB Vector Similarity Search
+ *    ↓
+ * Relevant Chunks
+ *    ↓
+ * This function
+ *    ↓
+ * Gemini grounded answer
+ *
  * @param {string} question - User question
- * @param {Array<Object>} chunks - Relevant document chunks
+ * @param {Array<Object>} chunks - Semantically retrieved document chunks
  * @returns {Promise<string>}
  */
 export const chatWithContext = async (question, chunks) => {
-  const context = chunks.map((c, i) => `[Chunk ${i + 1}]\n${c.content}`).join('\n\n');
+  if (!question || !question.trim()) {
+    throw new Error('Question is required');
+  }
 
-  const prompt = `Based on the following context from a document, Analyse the context and answer the user's question.
-If the answer is not in the context, say so.
+  if (!Array.isArray(chunks) || chunks.length === 0) {
+    return "I couldn't find relevant information in the document to answer your question.";
+  }
 
-Context:
+  const context = chunks
+    .map((chunk, index) => {
+      const page =
+        chunk.pageNumber !== undefined && chunk.pageNumber !== null
+          ? ` | Page: ${chunk.pageNumber}`
+          : '';
+
+      const chunkIndex =
+        chunk.chunkIndex !== undefined && chunk.chunkIndex !== null
+          ? ` | Chunk: ${chunk.chunkIndex}`
+          : '';
+
+      return `[Retrieved Context ${index + 1}${chunkIndex}${page}]
+${chunk.content}`;
+    })
+    .join('\n\n');
+
+  const prompt = `You are an AI learning assistant answering questions about a user's uploaded document.
+
+Use ONLY the retrieved document context provided below to answer the question.
+
+Rules:
+1. Answer using information supported by the retrieved context.
+2. Do not invent facts that are not present in the context.
+3. Do not rely on outside knowledge when the context does not support the answer.
+4. If the retrieved context does not contain enough information to answer the question, clearly say:
+   "I couldn't find enough information in the document to answer this question."
+5. Explain the answer clearly and naturally for a student.
+6. When useful, combine information from multiple retrieved chunks.
+7. Do not mention embeddings, vector databases, retrieval systems, or internal implementation details unless the user specifically asks about them.
+
+Retrieved document context:
 ${context}
 
-Question: ${question}
+User question:
+${question}
 
 Answer:`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
-    const generatedText = response.text;
-    return generatedText;
+    return response.text;
   } catch (error) {
     console.error('Gemini API error:', error);
     throw new Error('Failed to process chat request');
   }
 };
+
 
 /**
  * Explain a specific concept
@@ -213,12 +289,11 @@ ${context.substring(0, 10000)}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-3.5-flash-lite",
       contents: prompt,
     });
 
-    const generatedText = response.text;
-    return generatedText;
+    return response.text;
   } catch (error) {
     console.error('Gemini API error:', error);
     throw new Error('Failed to explain concept');
